@@ -1,0 +1,162 @@
+name: Build and publish
+
+# Daily: sync the Flathub manifest, look at the .deb Parsec is serving, and
+# rebuild + republish the flatpak repo only if either changed. A run with
+# nothing new finishes in well under a minute and builds nothing.
+on:
+  schedule:
+    - cron: "23 7 * * *"   # 07:23 UTC daily; "Run workflow" in the Actions tab for an immediate check
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if nothing changed
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # push the upstream merge
+  actions: write    # keep the schedule from being disabled after 60 idle days
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-and-publish
+  cancel-in-progress: false
+
+env:
+  APP_ID: com.parsecgaming.parsec
+  UPSTREAM: https://github.com/flathub/com.parsecgaming.parsec.git
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.build }}
+      sha: ${{ steps.sync.outputs.sha }}
+      runtime_version: ${{ steps.inputs.outputs.runtime_version }}
+      pages_url: ${{ steps.published.outputs.url }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Merge upstream Flathub changes
+        id: sync
+        run: |
+          git fetch --quiet "$UPSTREAM" master
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "Already contains upstream $(git rev-parse --short FETCH_HEAD)"
+          elif git -c user.name='github-actions[bot]' \
+                   -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                   merge --no-edit -m "Merge upstream $(git rev-parse --short FETCH_HEAD)" FETCH_HEAD \
+               && git push origin "HEAD:${GITHUB_REF_NAME}"; then
+            echo "Merged upstream $(git rev-parse --short FETCH_HEAD)"
+          else
+            git merge --abort 2>/dev/null || git reset --hard "$GITHUB_SHA"
+            echo "::warning::Could not merge upstream Flathub changes automatically; building the fork as it is. Merge flathub/master by hand."
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Pin the .deb Parsec is serving now
+        id: inputs
+        run: python3 -I ci/prepare.py build-inputs
+
+      - name: Look up what is published
+        id: published
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url 2>/dev/null || true)
+          url=${url:-https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/}
+          echo "url=${url%/}/" >> "$GITHUB_OUTPUT"
+          fp=$(curl -fsSL "${url%/}/state.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"])' 2>/dev/null || true)
+          echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
+          echo "Published fingerprint: ${fp:-none}"
+
+      - name: Decide
+        id: decide
+        run: |
+          if [ "${{ inputs.force }}" = true ]; then
+            echo "Forced rebuild"; echo build=true >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.inputs.outputs.fingerprint }}" != "${{ steps.published.outputs.fingerprint }}" ]; then
+            echo "Inputs changed (Parsec ${{ steps.inputs.outputs.version }}): rebuilding"; echo build=true >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing changed: skipping build"; echo build=false >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/upload-artifact@v7
+        if: steps.decide.outputs.build == 'true'
+        with:
+          name: build-inputs
+          path: build-inputs/
+
+      # Scheduled workflows are switched off after 60 days without repo
+      # activity; re-enabling through the API resets that timer.
+      - name: Keep the schedule alive
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/build.yml/enable" || true
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-${{ needs.check.outputs.runtime_version }}
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-inputs
+          path: build-inputs
+
+      - name: Import signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::Add the GPG_PRIVATE_KEY repository secret (see README.md)."; exit 1
+          fi
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: .flatpak-builder
+          key: flatpak-builder-${{ hashFiles('build-inputs/*.yml') }}
+          restore-keys: flatpak-builder-
+
+      - name: Build and export to a signed repo
+        run: |
+          flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --disable-rofiles-fuse --force-clean --install-deps-from=flathub \
+            --default-branch=stable --gpg-sign="${{ steps.gpg.outputs.key }}" \
+            --repo=repo builddir "build-inputs/$APP_ID.yml"
+          flatpak build-update-repo --generate-static-deltas --prune \
+            --title="Parsec (auto-built)" --gpg-sign="${{ steps.gpg.outputs.key }}" repo
+
+      - name: Lay out the site
+        run: ci/publish.sh repo site "${{ needs.check.outputs.pages_url }}" "${{ steps.gpg.outputs.key }}" build-inputs/inputs.json "${{ needs.check.outputs.sha }}"
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

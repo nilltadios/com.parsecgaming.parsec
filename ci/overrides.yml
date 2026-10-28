@@ -1,0 +1,4 @@
+# Applied on top of the Flathub manifest at build time (ci/prepare.py), so the
+# manifest itself stays identical to flathub/master and upstream merges never
+# conflict. runtime-version only applies while it is newer than upstream's.
+runtime-version: "26.08"
