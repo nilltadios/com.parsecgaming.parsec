@@ -1,8 +1,10 @@
 name: Build and publish
 
 # Daily: sync the Flathub manifest, look at the .deb Parsec is serving, and
-# rebuild + republish the flatpak repo only if either changed. A run with
-# nothing new finishes in well under a minute and builds nothing.
+# rebuild + republish the flatpak repo only if either changed. If only the web
+# page changed, republish the live repo unchanged around the new page, so users
+# are not offered an empty app update. A run with nothing new finishes in well
+# under a minute and builds nothing.
 on:
   schedule:
     - cron: "23 7 * * *"   # 07:23 UTC daily; "Run workflow" in the Actions tab for an immediate check
@@ -33,7 +35,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     outputs:
-      build: ${{ steps.decide.outputs.build }}
+      mode: ${{ steps.decide.outputs.mode }}
       sha: ${{ steps.sync.outputs.sha }}
       runtime_version: ${{ steps.inputs.outputs.runtime_version }}
       pages_url: ${{ steps.published.outputs.url }}
@@ -71,23 +73,29 @@ jobs:
           url=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url 2>/dev/null || true)
           url=${url:-https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/}
           echo "url=${url%/}/" >> "$GITHUB_OUTPUT"
-          fp=$(curl -fsSL "${url%/}/state.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["fingerprint"])' 2>/dev/null || true)
-          echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
-          echo "Published fingerprint: ${fp:-none}"
+          curl -fsSL "${url%/}/state.json" -o published.json 2>/dev/null || echo '{}' > published.json
+          for key in fingerprint site_fingerprint; do
+            value=$(python3 -c 'import json,sys; print(json.load(open("published.json")).get(sys.argv[1], ""))' "$key" 2>/dev/null || true)
+            echo "$key=$value" >> "$GITHUB_OUTPUT"
+            echo "Published $key: ${value:-none}"
+          done
 
       - name: Decide
         id: decide
         run: |
           if [ "${{ inputs.force }}" = true ]; then
-            echo "Forced rebuild"; echo build=true >> "$GITHUB_OUTPUT"
+            echo "Forced rebuild"; mode=build
           elif [ "${{ steps.inputs.outputs.fingerprint }}" != "${{ steps.published.outputs.fingerprint }}" ]; then
-            echo "Inputs changed (Parsec ${{ steps.inputs.outputs.version }}): rebuilding"; echo build=true >> "$GITHUB_OUTPUT"
+            echo "Inputs changed (Parsec ${{ steps.inputs.outputs.version }}): rebuilding"; mode=build
+          elif [ "${{ steps.inputs.outputs.site_fingerprint }}" != "${{ steps.published.outputs.site_fingerprint }}" ]; then
+            echo "Only the web page changed: republishing the site, app unchanged"; mode=site
           else
-            echo "Nothing changed: skipping build"; echo build=false >> "$GITHUB_OUTPUT"
+            echo "Nothing changed: skipping build"; mode=skip
           fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
-        if: steps.decide.outputs.build == 'true'
+        if: steps.decide.outputs.mode != 'skip'
         with:
           name: build-inputs
           path: build-inputs/
@@ -102,7 +110,7 @@ jobs:
 
   build:
     needs: check
-    if: needs.check.outputs.build == 'true'
+    if: needs.check.outputs.mode == 'build'
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-${{ needs.check.outputs.runtime_version }}
@@ -151,8 +159,46 @@ jobs:
         with:
           path: site
 
+  # Page-only change: copy the live repo as is (same commits, so nothing for
+  # clients to update), re-sign its summary, and lay the new page around it.
+  site:
+    needs: check
+    if: needs.check.outputs.mode == 'site'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: build-inputs
+          path: build-inputs
+
+      - name: Install ostree and flatpak
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ostree flatpak
+
+      - name: Import signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')" >> "$GITHUB_OUTPUT"
+
+      - name: Mirror the live repo
+        run: ci/mirror-live-repo.sh "${{ needs.check.outputs.pages_url }}repo/" repo "${{ steps.gpg.outputs.key }}"
+
+      - name: Lay out the site
+        run: ci/publish.sh repo site "${{ needs.check.outputs.pages_url }}" "${{ steps.gpg.outputs.key }}" build-inputs/inputs.json "${{ needs.check.outputs.sha }}"
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
   deploy:
-    needs: build
+    needs: [build, site]
+    if: always() && (needs.build.result == 'success' || needs.site.result == 'success')
     runs-on: ubuntu-latest
     environment:
       name: github-pages

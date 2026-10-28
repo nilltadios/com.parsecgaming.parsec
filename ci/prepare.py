@@ -8,6 +8,8 @@ the result. The fingerprint changes only when something that ends up in the
 flatpak changes, so CI can skip builds when nothing upstream moved.
 
 Usage: prepare.py [--repo DIR] OUT_DIR
+Also fingerprints the web page (ci/publish.sh + ci/site/) separately, so a
+page change republishes the site without touching the app.
 Outputs: OUT_DIR/inputs.json, and key=value lines on $GITHUB_OUTPUT if set.
 """
 
@@ -109,10 +111,10 @@ def bump_git_sources(manifest):
     return bumps
 
 
-def fingerprint(out_dir):
+def fingerprint(root, paths):
     h = hashlib.sha256()
-    for path in sorted(p for p in out_dir.rglob("*") if p.is_file() and p.name != "inputs.json"):
-        h.update(str(path.relative_to(out_dir)).encode() + b"\0")
+    for path in sorted(paths):
+        h.update(str(path.relative_to(root)).encode() + b"\0")
         h.update(hashlib.sha256(path.read_bytes()).digest())
     return h.hexdigest()
 
@@ -154,7 +156,12 @@ def main():
     add_release(args.out_dir / f"{APP_ID}.metainfo.xml", version, date)
 
     info = {
-        "fingerprint": fingerprint(args.out_dir),
+        # What ends up in the flatpak; a change means a new build users update to.
+        "fingerprint": fingerprint(args.out_dir, (p for p in args.out_dir.rglob("*")
+                                                  if p.is_file() and p.name != "inputs.json")),
+        # Only the web page around the repo; a change republishes the site, not the app.
+        "site_fingerprint": fingerprint(args.repo, [args.repo / "ci/publish.sh",
+                                                    *(args.repo / "ci/site").rglob("*")]),
         "version": version,
         "deb_date": date,
         "deb_sha256": sha256,

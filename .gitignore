@@ -1,5 +1,5 @@
 .flatpak-builder/
 builddir/
-build-inputs/
-repo/
-site/
+/build-inputs/
+/repo/
+/site/

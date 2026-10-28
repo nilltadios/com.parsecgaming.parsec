@@ -142,7 +142,9 @@ Once a day (07:23 UTC), on every push to `master`, and on manual runs
 3. **Skip or build.** Compares a fingerprint of those inputs with the
    `state.json` already published. If they match, it stops there. If they
    differ, it builds in Flathub's container, signs the result, and deploys
-   to Pages.
+   to Pages. If only the web page changed (`ci/publish.sh`,
+   `ci/site/`), CI copies the live repo unchanged (`ci/mirror-live-repo.sh`)
+   and redeploys it with the new page. Users see no app update.
 
 Each build is a fresh repo containing one commit. `flatpak update` only
 compares commit IDs, so it does not need the older commits.

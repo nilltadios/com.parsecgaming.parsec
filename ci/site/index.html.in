@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="Parsec as a Flatpak that updates through Discover, GNOME Software and flatpak update.">
+<title>Parsec Flatpak</title>
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #ff0000;
+    --red-hot: #ff3b3b;
+    --red-deep: #4d0000;
+    --black: #000;
+    --ink: #0b0b0b;
+    --panel: #121212;
+    --line: #2a2a2a;
+    --text: #f3f3f3;
+    --muted: #b4b4b4;
+    --display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--black); }
+  body {
+    margin: 0;
+    color: var(--text);
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 4px),
+      radial-gradient(120% 70% at 85% -10%, rgba(255,0,0,.20), transparent 60%),
+      var(--black);
+    font: 17px/1.65 var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--red-hot); text-underline-offset: 3px; }
+  a:hover { color: #fff; }
+  :focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+  .wrap { max-width: 60rem; margin: 0 auto; padding: 0 16px; }
+
+  /* ---------- hero ---------- */
+  header { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  header::after {            /* red slab cutting across the hero */
+    content: ""; position: absolute; right: -12%; top: -40%;
+    width: 46%; height: 180%; background: var(--red);
+    transform: rotate(14deg); opacity: .9; z-index: 0;
+  }
+  .hero { position: relative; z-index: 1; padding-top: 56px; padding-bottom: 48px; }
+  .tag {
+    display: inline-flex; align-items: center; gap: .55rem;
+    font: 600 .78rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 14px; }
+  .bars i { width: 4px; background: var(--red); animation: signal 1.6s ease-in-out infinite; }
+  .bars i:nth-child(1) { height: 35%; }
+  .bars i:nth-child(2) { height: 60%; animation-delay: .15s; }
+  .bars i:nth-child(3) { height: 85%; animation-delay: .3s; }
+  .bars i:nth-child(4) { height: 100%; animation-delay: .45s; }
+  @keyframes signal { 50% { opacity: .25; } }
+  h1 {
+    margin: .2rem 0 0; font: 900 clamp(4.2rem, 16vw, 9.5rem)/.82 var(--display);
+    letter-spacing: .01em; text-transform: uppercase;
+    text-shadow: 6px 6px 0 var(--black);
+  }
+  h1 span { color: var(--red); }
+  .lede { max-width: 30rem; margin: 1.1rem 0 1.6rem; font-size: 1.15rem; color: var(--text); }
+  .lede b { color: #fff; }
+  .version {
+    display: inline-block; margin-left: .2rem; padding: .1rem .5rem;
+    font: 600 .95rem var(--mono); color: var(--black); background: var(--text);
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .6rem;
+    padding: .9rem 1.3rem; font: 700 1.05rem/1 var(--body); text-decoration: none;
+    border: 2px solid var(--red); transition: transform .15s, background .15s, color .15s;
+  }
+  .btn.primary { background: var(--red); color: var(--black); box-shadow: 5px 5px 0 var(--text); }
+  .btn.primary:hover { background: var(--red-hot); color: var(--black); transform: translate(-2px,-2px); box-shadow: 7px 7px 0 var(--text); }
+  .btn.ghost { background: var(--black); color: var(--text); }
+  .btn.ghost:hover { background: var(--red-deep); color: #fff; }
+  .hero > * { max-width: 34rem; }
+  .hero > h1 { max-width: none; }
+  .hint { margin: 1rem 0 0; font-size: .92rem; color: var(--muted); }
+
+  /* ---------- sections ---------- */
+  main { padding: 24px 0 8px; }
+  section { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0 1.5rem; padding: 36px 0; border-bottom: 1px solid var(--line); }
+  .num { font: 900 3.6rem/1 var(--display); color: var(--red); }
+  h2 { margin: 0 0 .5rem; font: 700 2rem/1.1 var(--display); letter-spacing: .02em; text-transform: uppercase; }
+  section p { margin: .5rem 0; max-width: 42rem; }
+  .muted { color: var(--muted); }
+  code { font: .92em var(--mono); color: #fff; background: var(--panel); padding: .08em .35em; border: 1px solid var(--line); }
+
+  .cmd { position: relative; margin: .8rem 0; background: var(--ink); border: 1px solid var(--line); border-left: 4px solid var(--red); }
+  .cmd pre { margin: 0; padding: .95rem 6.2rem .95rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; font: .9rem/1.55 var(--mono); color: #fff; }
+  .cmd pre::before { content: "$ "; color: var(--red); user-select: none; }
+  .cmd.out pre::before { content: ""; }
+  .cmd.out { border-left-color: var(--muted); }
+  .copy {
+    position: absolute; top: .55rem; right: .55rem; padding: .35rem .7rem;
+    font: 600 .78rem var(--mono); text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text); background: var(--panel); border: 1px solid var(--line); cursor: pointer;
+  }
+  .copy:hover { border-color: var(--red); color: #fff; }
+  .copy.done { background: var(--red); color: var(--black); border-color: var(--red); }
+
+  .note { margin-top: 1rem; padding: .8rem 1rem; background: var(--panel); border: 1px solid var(--line); font-size: .95rem; }
+  .note b { color: var(--red-hot); }
+
+  table { width: 100%; max-width: 42rem; border-collapse: collapse; margin-top: .6rem; }
+  th, td { text-align: left; padding: .65rem .2rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { width: 34%; font-weight: 700; color: #fff; }
+  td { color: var(--text); }
+
+  /* ---------- build facts ---------- */
+  .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 36px 0; }
+  .fact { background: var(--ink); padding: 1rem; }
+  .fact dt { font: 600 .72rem var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .fact dd { margin: .3rem 0 0; font: 600 1rem var(--mono); color: #fff; overflow-wrap: anywhere; }
+  .fact.hot dd { color: var(--red-hot); }
+
+  footer { padding: 8px 0 48px; font-size: .92rem; color: var(--muted); }
+  footer a { color: var(--text); }
+
+  /* ---------- load-in ---------- */
+  /* slide only, never fade: text stays readable even if animations never run */
+  .rise { animation: rise .6s cubic-bezier(.2,.7,.2,1) backwards; }
+  .d1 { animation-delay: .05s; } .d2 { animation-delay: .15s; } .d3 { animation-delay: .25s; } .d4 { animation-delay: .35s; }
+  @keyframes rise { from { transform: translateY(18px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .rise { animation: none; }
+    .bars i { animation: none; }
+    .btn { transition: none; }
+  }
+
+  @media (max-width: 640px) {
+    header::after { width: 60%; right: -58%; }
+    section { grid-template-columns: minmax(0, 1fr); }
+    .num { font-size: 2.6rem; margin-bottom: .3rem; }
+    .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cmd pre { padding-right: 1rem; padding-top: 2.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hero">
+    <div class="tag rise d1"><span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Auto-built Flatpak</div>
+    <h1 class="rise d2">Par<span>sec</span></h1>
+    <p class="lede rise d3">Parsec that <b>updates itself</b> through Discover, GNOME Software and <code>flatpak update</code>. Current build <span class="version">@VERSION@</span></p>
+    <div class="actions rise d4">
+      <a class="btn primary" href="@APP@.flatpakref">Install Parsec &rarr;</a>
+      <a class="btn ghost" href="parsec.flatpakrepo">Add the repo only</a>
+    </div>
+    <p class="hint rise d4"><b>Install Parsec</b> downloads a small file. Open it and Discover or GNOME Software takes it from there.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <div class="num">01</div>
+    <div>
+      <h2>Install from a terminal</h2>
+      <p>Add the repo, then install. Both commands are per-user. Nothing needs root.</p>
+      <div class="cmd"><pre>flatpak remote-add --user --if-not-exists @REMOTE@ @BASE@parsec.flatpakrepo</pre><button class="copy" type="button">Copy</button></div>
+      <div class="cmd"><pre>flatpak install --user @REMOTE@ @APP@</pre><button class="copy" type="button">Copy</button></div>
+      <p class="muted">The runtime (Freedesktop @RUNTIME@) comes from Flathub. If you have never added Flathub, add it first:</p>
+      <div class="cmd"><pre>flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo</pre><button class="copy" type="button">Copy</button></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="num">02</div>
+    <div>
+      <h2>Already have it from Flathub?</h2>
+      <p>Add the repo (first command above), then switch the installed app over. Only the app files are replaced. Your login and settings in <code>~/.var/app/@APP@</code> stay.</p>
+      <div class="cmd"><pre>flatpak install --user --reinstall @REMOTE@ @APP@</pre><button class="copy" type="button">Copy</button></div>
+      <div class="note"><b>System-wide install?</b> The repo and the app must be in the same installation. If Parsec is installed system-wide, replace <code>--user</code> with <code>--system</code> in every command.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="num">03</div>
+    <div>
+      <h2>Check it worked</h2>
+      <p>The second column must say <code>@REMOTE@</code>. If it says <code>flathub</code>, run step 02.</p>
+      <div class="cmd"><pre>flatpak list --app --columns=application,origin,version | grep -i parsec</pre><button class="copy" type="button">Copy</button></div>
+      <div class="cmd out"><pre>@APP@   @REMOTE@   @VERSION@</pre></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="num">04</div>
+    <div>
+      <h2>Updates</h2>
+      <p>Once a day the repo checks for a new Parsec release or a change in the Flathub manifest. If something changed, it publishes a new build. You update the usual way:</p>
+      <table>
+        <tr><th>Terminal</th><td><code>flatpak update</code></td></tr>
+        <tr><th>KDE Discover</th><td><b>Updates</b>. Click <b>Refresh</b> if nothing is listed yet</td></tr>
+        <tr><th>GNOME Software</th><td>The <b>Updates</b> tab. Refresh if needed</td></tr>
+        <tr><th>Automatic updates</th><td>The store's auto-update setting covers this app too</td></tr>
+      </table>
+      <p class="muted">Seeing Parsec twice in the store? One copy is from Flathub. Updates always come from the source it is installed from.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="num">05</div>
+    <div>
+      <h2>Go back to Flathub</h2>
+      <div class="cmd"><pre>flatpak install --user --reinstall flathub @APP@</pre><button class="copy" type="button">Copy</button></div>
+      <div class="cmd"><pre>flatpak remote-delete --user @REMOTE@</pre><button class="copy" type="button">Copy</button></div>
+    </div>
+  </section>
+
+  <dl class="facts" aria-label="Current build">
+    <div class="fact hot"><dt>Parsec</dt><dd>@VERSION@</dd></div>
+    <div class="fact"><dt>Released</dt><dd>@DEB_DATE@</dd></div>
+    <div class="fact"><dt>Runtime</dt><dd>Freedesktop @RUNTIME@</dd></div>
+    <div class="fact"><dt>.deb sha256</dt><dd>@DEB_SHA_SHORT@&hellip;</dd></div>
+    <div class="fact"><dt>Published</dt><dd>@PUBLISHED@</dd></div>
+    <div class="fact"><dt>Source</dt><dd><a href="@REPO_URL@/commit/@COMMIT@">@COMMIT_SHORT@</a></dd></div>
+  </dl>
+</main>
+
+<footer class="wrap">
+  Built from the <a href="https://github.com/flathub/@APP@">Flathub manifest</a> by <a href="@REPO_URL@">@REPO_NAME@</a>.
+  Machine-readable build info: <a href="state.json">state.json</a>.
+  Parsec is proprietary software by Parsec Cloud, Inc. It is downloaded from Parsec's own servers at install time.
+</footer>
+
+<script>
+  document.querySelectorAll(".copy").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = btn.previousElementSibling.textContent;
+      var done = function () {
+        btn.textContent = "Copied"; btn.classList.add("done");
+        setTimeout(function () { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1400);
+      };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    });
+  });
+</script>
+</body>
+</html>
