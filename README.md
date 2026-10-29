@@ -3,7 +3,7 @@
 This fork of [flathub/com.parsecgaming.parsec](https://github.com/flathub/com.parsecgaming.parsec)
 publishes its own signed Flatpak repo at
 **https://nilltadios.github.io/com.parsecgaming.parsec/**.
-Once Parsec is installed from it, Discover, GNOME Software and
+Once Parsec is installed from it, COSMIC Store, Discover, GNOME Software and
 `flatpak update` update it like any other app. You never download or
 reinstall anything by hand.
 
@@ -12,11 +12,11 @@ reinstall anything by hand.
 Pick one of the three ways. They all add the same remote, `parsec-autobuild`,
 and install the same app. The app keeps updating from that remote afterwards.
 
-### A. Discover or GNOME Software (one click)
+### A. COSMIC Store, Discover or GNOME Software (one click)
 
 1. Open https://nilltadios.github.io/com.parsecgaming.parsec/com.parsecgaming.parsec.flatpakref.
    Your browser downloads a small `.flatpakref` file.
-2. Open that file. Discover or GNOME Software shows Parsec. Click **Install**.
+2. Open that file. COSMIC Store, Discover or GNOME Software shows Parsec. Click **Install**.
 
 The store adds the `parsec-autobuild` remote for you. If the
 `org.freedesktop.Platform` 26.08 runtime is missing, the store fetches it
@@ -81,6 +81,7 @@ you normally update:
 | where | what to do |
 |---|---|
 | Terminal | run `flatpak update` (Parsec shows up under `parsec-autobuild`) |
+| COSMIC Store | click **Updates** in the sidebar |
 | KDE Discover | click **Updates**. If nothing is listed yet, click **Refresh** |
 | GNOME Software | open the **Updates** tab and click the refresh button if needed |
 | automatic updates | the stores' auto-update setting covers this app too |
@@ -153,7 +154,7 @@ compares commit IDs, so it does not need the older commits.
 |---|---|
 | `repo/` | the signed OSTree repo |
 | `parsec.flatpakrepo` | adds the remote |
-| `com.parsecgaming.parsec.flatpakref` | one-click install in Discover / GNOME Software |
+| `com.parsecgaming.parsec.flatpakref` | one-click install in COSMIC Store / Discover / GNOME Software |
 | `state.json` | what is published: Parsec version, `.deb` sha, fingerprint, commits |
 
 ## Maintainer setup (once)
